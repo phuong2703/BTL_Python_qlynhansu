@@ -37,7 +37,7 @@ app.config['SAVE_FOLDER_PDF'] = SAVE_FOLDER_PDF
 app.config['SAVE_FOLDER_EXCEL'] = SAVE_FOLDER_EXCEL
 
 mysql = MySQL(app)
-
+# cmt
 def login_required(func): # need for some router
     @functools.wraps(func)
     def secure_function(*args, **kwargs):
@@ -699,6 +699,7 @@ def delete_nhan_vien(maNV):
 # ------------------ Trình độ học vấn ------------------------
 #
 @login_required
+@login_required
 @app.route("/form_add_trinhdohocvan", methods=['GET','POST'])
 def form_add_trinhdohocvan():
     if session['role_id'] != 1:
@@ -714,7 +715,7 @@ def form_add_trinhdohocvan():
         TenTDHV = details["TenTDHV"].strip()
         ChuyenNganh = details['ChuyenNganh'].strip()
         for data in trinhdohocvan:
-            if (MATDHV in data):
+            if any(MATDHV == row[0] for row in trinhdohocvan):
                 return render_template(session['role'] +"form_add_trinhdohocvan.html", 
                                        ma_err = "True", 
                                        congty = session['congty'],
@@ -999,20 +1000,24 @@ def get_table_trinh_do_hoc_van_nhan_vien_pdf(maTDHV):
 def table_chuc_vu():
     if session['role_id'] != 1:
         abort(404)
+
     cur = mysql.connection.cursor()
+
+    # Truy vấn lấy MaCV, TenCV và đếm số lượng nhân viên đang giữ chức vụ đó
     cur.execute("""
-        SELECT cv.MaCV, cv.TenCV, COUNT(NV.MaNhanVien) 
+        SELECT cv.MaCV, cv.TenCV, COUNT(nv.MaNhanVien) 
         FROM qlnv_chucvu cv
         LEFT JOIN qlnv_nhanvien nv ON cv.MaCV = nv.MaChucVu
-        LEFT JOIN qlnv_thoigiancongtac tg ON tg.MaNV = nv.MaNhanVien
-        WHERE tg.DuongNhiem = 1 
-        GROUP BY cv.MaCV""")
+        GROUP BY cv.MaCV
+    """)
+
     chucvu = cur.fetchall()
     cur.close()
-    return render_template(session['role'] +"chucvu/table_chuc_vu.html",
-                           chucvu = chucvu,
-                           congty = session['congty'],
-                           my_user = session['username'])
+
+    return render_template(session['role'] + "chucvu/table_chuc_vu.html",
+                           chucvu=chucvu,
+                           congty=session['congty'],
+                           my_user=session['username'])
     
 @login_required
 @app.route("/form_view_update_chuc_vu/<string:mode>_<string:maCV>", methods=['GET','POST'])
@@ -2579,7 +2584,7 @@ def form_add_data_cham_cong():
 #
 # ------------------ CHAM CONG ------------------------
 #
-
+# Deivy
 #
 # ------------------ PHONG BAN ------------------------
 #
@@ -2630,6 +2635,7 @@ def view_phong_ban(maPB):
                 WHERE MaPB = %s
                 ORDER BY MaPB ASC""", (maPB, ))
     raw_data = cur.fetchall()
+    # print("raw_data[0]:", raw_data[0])
     
     if (len(raw_data) == 0):
         abort(404)
@@ -2655,13 +2661,14 @@ def view_phong_ban(maPB):
     for elm in raw_data[0]:
         phongban.append(elm)
     phongban.append(count_data[0])
-    
     cur.execute("""
                 SELECT nv.TenNV, nv.DienThoai
                 FROM qlnv_nhanvien nv
                 WHERE nv.MaNhanVien = %s
-                """, (phongban[4], ))
-    truongphong = cur.fetchall()[0]
+                """, (phongban[4], )) #fix
+    # truongphong = cur.fetchall()[0]
+    result = cur.fetchone()
+    truongphong=result if result else ("Chưa có", "Chưa có")
     
     cur.execute("""
                 SELECT COUNT(*)
@@ -2718,20 +2725,20 @@ def form_update_phong_ban(maPB):
         MaTP = detail['MaTP']
         DIACHI = detail['DIACHI']
         
-        if MaTP != phongban[4]:
+        if MaTP != phongban[4]: #kiểm tra trưởng phòng mới
             cur.execute("""
                         SELECT * 
                         FROM qlnv_nhanvien
                         WHERE MaNhanVien = %s 
                         """, (MaTP, ))
 
-            if (len(cur.fetchall()) != 1):
+            if (len(cur.fetchall()) != 1): #kiểm tra xem mnv có tồn tại khkh
                 return render_template(session['role'] +'phongban/form_add_data_phong_ban.html',
-                                    err = "Không tồn lại mã nhân viên " + MaTP,
+                                    err = "Nhân viên không tồn tại " + MaTP,
                                     phongban = phongban,
                             congty = session['congty'],
                             my_user = session['username'])
-        
+            #kiểm tra xem đã là tp của phòng khác chưa
             cur.execute("""
                         SELECT * 
                         FROM qlnv_phongban
@@ -2751,7 +2758,7 @@ def form_update_phong_ban(maPB):
                     WHERE MaPB = %s;
                     """, ( TenPB, DIACHI, SDT, MaTP,MaPB))
         mysql.connection.commit()
-        return redirect(url_for('view_all_phong_ban'))
+        return redirect(url_for('view_all_phong_ban'))#chuyển hướng về trang đầu
     
     return render_template(session['role'] +'phongban/form_update_phong_ban.html',
                            phongban = phongban,
@@ -2780,7 +2787,7 @@ def delete_phong_ban(maPB):
                 """, (maPB, ))
     mysql.connection.commit()
     return redirect(url_for('view_all_phong_ban'))
-    
+ 
 @login_required
 @app.route('/form_add_data_phong_ban', methods=['GET','POST'])
 def form_add_data_phong_ban():
@@ -2801,7 +2808,7 @@ def form_add_data_phong_ban():
                     FROM qlnv_nhanvien
                     WHERE MaNhanVien = %s 
                     """, (MaTP, ))
-
+        #check mã TP
         if (len(cur.fetchall()) != 1):
             return render_template(session['role'] +'phongban/form_add_data_phong_ban.html',
                                    err = "Không tồn lại mã nhân viên " + MaTP,
@@ -2813,7 +2820,7 @@ def form_add_data_phong_ban():
                     FROM qlnv_phongban
                     WHERE MaTruongPhong = %s 
                     """, (MaTP, ))
-        
+        #check nv đã là TP chưa
         if (len(cur.fetchall()) != 0):
             return render_template(session['role'] +'phongban/form_add_data_phong_ban.html',
                                    err = "Nhân viên " + MaTP + " đã làm trưởng phòng phòng khác",
@@ -2825,7 +2832,7 @@ def form_add_data_phong_ban():
                     FROM qlnv_phongban
                     WHERE MaPB = %s 
                     """, (MaPB, ))
-        
+        #check mã PB bị trùng
         if (len(cur.fetchall()) != 0):
             return render_template(session['role'] +'phongban/form_add_data_phong_ban.html',
                                    err = "Mã " + MaPB + " đã tồn tại",
@@ -2840,7 +2847,7 @@ def form_add_data_phong_ban():
     return render_template(session['role'] +'phongban/form_add_data_phong_ban.html',
                            congty = session['congty'],
                            my_user = session['username'])
-
+#14/04/2025
 @login_required
 @app.route('/form_add_thuong_phat_phong_ban/<string:maPB>', methods=['GET','POST'])
 def form_add_thuong_phat_phong_ban(maPB):
@@ -3076,220 +3083,6 @@ def delete_thuong_phat(maPB, id):
 #
 # ------------------ PHONG BAN ------------------------
 #
-
-
-#
-# ------------------ Thoi gian cong tac ------------------------
-#
-
-@login_required
-@app.route("/view_all_thoi_gian_cong_tac")
-def view_all_thoi_gian_cong_tac():
-    if session['role_id'] != 1:
-        abort(404)
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                SELECT nv.MaNhanVien, nv.TenNV, cv.TenCV, pb.TenPB, COUNT(tg.MaNV)
-                FROM qlnv_nhanvien nv
-                RIGHT JOIN qlnv_thoigiancongtac tg ON tg.MaNV = nv.MaNhanVien
-                JOIN qlnv_chucvu cv ON cv.MaCV = nv.MaChucVu
-                JOIN qlnv_phongban pb ON pb.MaPB = nv.MaPhongBan
-                GROUP BY nv.MaNhanVien
-                ORDER BY nv.MaNhanVien ASC
-                """)
-    thoigiancongtac = cur.fetchall()
-    
-    return render_template(session['role'] +"thoigiancongtac/view_all_thoi_gian_cong_tac.html",
-                           thoigiancongtac = thoigiancongtac,
-                           congty = session['congty'],
-                           my_user = session['username'])
-
-@login_required
-@app.route("/get_print_all_thoi_gian_cong_tac")
-def get_print_all_thoi_gian_cong_tac():
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                SELECT nv.MaNhanVien, nv.TenNV, cv.TenCV, pb.TenPB, COUNT(tg.MaNV)
-                FROM qlnv_nhanvien nv
-                RIGHT JOIN qlnv_thoigiancongtac tg ON tg.MaNV = nv.MaNhanVien
-                JOIN qlnv_chucvu cv ON cv.MaCV = nv.MaChucVu
-                JOIN qlnv_phongban pb ON pb.MaPB = nv.MaPhongBan
-                GROUP BY nv.MaNhanVien
-                ORDER BY nv.MaNhanVien ASC
-                """)
-    thoigiancongtac = cur.fetchall()
-    
-    return render_template("thoigiancongtac/table_print_all_thoi_gian_cong_tac.html",
-                           thoigiancongtac = thoigiancongtac)
-
-@login_required
-@app.route("/get_all_thoi_gian_cong_tac_pdf")
-def get_all_thoi_gian_cong_tac_pdf():
-    if session['role_id'] != 1:
-        abort(404)
-    pathFile = app.config['SAVE_FOLDER_PDF']  + "/Thoi_Gian_Cong_Tac.pdf"
-    pdfkit.from_url("/".join(request.url.split("/")[:-1:]) + '/get_print_all_thoi_gian_cong_tac' ,pathFile)
-    return send_file(pathFile, as_attachment=True)
-
-@login_required
-@app.route("/get_all_thoi_gian_cong_tac_excel")
-def get_all_thoi_gian_cong_tac_excel():
-    if session['role_id'] != 1:
-        abort(404)
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                SELECT nv.MaNhanVien, nv.TenNV, cv.TenCV, pb.TenPB, COUNT(tg.MaNV)
-                FROM qlnv_nhanvien nv
-                RIGHT JOIN qlnv_thoigiancongtac tg ON tg.MaNV = nv.MaNhanVien
-                JOIN qlnv_chucvu cv ON cv.MaCV = nv.MaChucVu
-                JOIN qlnv_phongban pb ON pb.MaPB = nv.MaPhongBan
-                GROUP BY nv.MaNhanVien
-                ORDER BY nv.MaNhanVien ASC
-                """)
-    thoigiancongtac = cur.fetchall()
-    
-    column_name = ['MaNhanVien','TenNV' ,'TenCV_HienTai', 'TenPB', 'SoChuVuDaLam']
-    data = pd.DataFrame.from_records(thoigiancongtac, columns=column_name)
-    data = data.set_index('MaNhanVien')
-    pathFile = app.config['SAVE_FOLDER_EXCEL'] + "/Thoi_Gian_Cong_Tac.xlsx"
-    data.to_excel(pathFile)
-    return send_file(pathFile, as_attachment=True)
-
-@login_required
-@app.route("/view_thoi_gian_cong_tac/<string:maNV>")
-def view_thoi_gian_cong_tac(maNV):
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                 SELECT nv.TenNV
-                 FROM qlnv_nhanvien nv
-                 WHERE nv.MaNhanVien = %s
-                 """, (maNV, ))
-    TenNV = cur.fetchall()
-    if (len(TenNV) == 0):
-        abort(404)
-    
-    TenNV = TenNV[0][0]
-    
-    cur.execute("""
-                SELECT tg.*, cv.TenCV
-                FROM qlnv_thoigiancongtac tg
-                JOIN qlnv_chucvu cv ON tg.MaCV = cv.MaCV
-                WHERE MaNV = %s
-                ORDER BY NgayNhanChuc DESC
-                """, (maNV, ))
-    thoigiancongtac = cur.fetchall()
-    
-    if (len(thoigiancongtac) == 0):
-        abort(404)
-    
-    return render_template(session['role'] +"thoigiancongtac/view_thoi_gian_cong_tac.html",
-                           thoigiancongtac = thoigiancongtac,
-                           TenNV = TenNV,
-                           MaNV = maNV,
-                           congty = session['congty'],
-                           my_user = session['username'])
-    
-@login_required
-@app.route("/delete_thoi_gian_cong_tac/<string:id>")
-def delete_thoi_gian(id):
-    if session['role_id'] != 1:
-        abort(404)
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                SELECT *
-                FROM qlnv_thoigiancongtac
-                WHERE id = %s
-                """, (id, ))
-    tg_cong_tac = cur.fetchall()
-    
-    if (len(tg_cong_tac) == 0):
-        abort(404)
-    
-    cur.execute("""
-                DELETE FROM qlnv_thoigiancongtac
-                WHERE id = %s
-                """, (id, ))
-    
-    mysql.connection.commit()
-    return redirect(url_for('view_all_thoi_gian_cong_tac'))
-
-@login_required
-@app.route("/get_print_thoi_gian_cong_tac/<string:maNV>")
-def get_print_thoi_gian_cong_tac(maNV):
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                 SELECT nv.TenNV
-                 FROM qlnv_nhanvien nv
-                 WHERE nv.MaNhanVien = %s
-                 """, (maNV, ))
-    TenNV = cur.fetchall()
-    if (len(TenNV) == 0):
-        abort(404)
-    
-    TenNV = TenNV[0][0]
-    
-    cur.execute("""
-                SELECT tg.*, cv.TenCV
-                FROM qlnv_thoigiancongtac tg
-                JOIN qlnv_chucvu cv ON tg.MaCV = cv.MaCV
-                WHERE MaNV = %s
-                ORDER BY NgayNhanChuc DESC
-                """, (maNV, ))
-    thoigiancongtac = cur.fetchall()
-    
-    if (len(thoigiancongtac) == 0):
-        abort(404)
-    
-    return render_template("thoigiancongtac/table_print_thoi_gian_cong_tac.html",
-                           thoigiancongtac = thoigiancongtac,
-                           TenNV = TenNV,
-                           MaNV = maNV)
-
-@login_required
-@app.route("/get_thoi_gian_cong_tac_excel/<string:maNV>")
-def get_thoi_gian_cong_tac_excel(maNV):
-    cur = mysql.connection.cursor()
-    cur.execute("""
-                 SELECT nv.TenNV
-                 FROM qlnv_nhanvien nv
-                 WHERE nv.MaNhanVien = %s
-                 """, (maNV, ))
-    TenNV = cur.fetchall()
-    if (len(TenNV) == 0):
-        abort(404)
-    
-    TenNV = TenNV[0][0]
-    
-    cur.execute("""
-                SELECT tg.*, cv.TenCV
-                FROM qlnv_thoigiancongtac tg
-                JOIN qlnv_chucvu cv ON tg.MaCV = cv.MaCV
-                WHERE MaNV = %s
-                ORDER BY NgayNhanChuc DESC
-                """, (maNV, ))
-    thoigiancongtac = cur.fetchall()
-    
-    if (len(thoigiancongtac) == 0):
-        abort(404)
-    
-    column_name = ['id','MaNV' ,'MaCV', 'NgayNhanChuc', 'NgayKetThuc', 'DuongNhiem', 'TenCV']
-    data = pd.DataFrame.from_records(thoigiancongtac, columns=column_name)
-    data = data.set_index('id')
-    pathFile = app.config['SAVE_FOLDER_EXCEL'] + "/Thoi_Gian_Cong_Tac_"+ maNV + ".xlsx"
-    data.to_excel(pathFile)
-    return send_file(pathFile, as_attachment=True)
-    
-    
-@login_required
-@app.route("/get_thoi_gian_cong_tac_pdf/<string:maNV>")
-def get_thoi_gian_cong_tac_pdf(maNV):
-    pathFile = app.config['SAVE_FOLDER_PDF']  + "/Thoi_Gian_Cong_Tac_"+ maNV + ".pdf"
-    pdfkit.from_url("/".join(request.url.split("/")[:-2:]) + '/get_print_thoi_gian_cong_tac/' + maNV ,pathFile)
-    return send_file(pathFile, as_attachment=True)
-#
-# ------------------ Thoi gian cong tac ------------------------
-#
-
 
 #
 # ------------------ HOP DONG ------------------------
